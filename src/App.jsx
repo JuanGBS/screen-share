@@ -48,6 +48,7 @@ function App() {
       call.on('stream', (remoteStream) => {
         if (videoRef.current) {
           videoRef.current.srcObject = remoteStream;
+          videoRef.current.muted = false; 
           videoRef.current.play().catch(e => console.error("Erro autoplay:", e));
           setStatus('Recebendo transmissão');
           setIsConnected(true);
@@ -141,6 +142,10 @@ function App() {
         audio: config.audio // Liga/Desliga audio baseado no modal
       });
 
+      if (stream.getAudioTracks().lenght === 0 ){
+        console.warn("Nenhuma trila de audio foi encontrada. O usuário marcou 'Compartilhar Audio'?")
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
@@ -178,6 +183,7 @@ function App() {
      peerInstance.current.on('connection', (conn) => {
         conn.on('data', (data) => {
             if(data.type === 'request-stream' && videoRef.current && videoRef.current.srcObject) {
+              const localStream = videoRef.current.srcObject;
                 peerInstance.current.call(data.peerId, videoRef.current.srcObject);
             }
         });
@@ -262,7 +268,7 @@ function App() {
                 onMouseMove={resetControlsTimeout} // Mover o mouse mostra os controles
                 className="relative w-full h-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group cursor-pointer"
               >
-                <video ref={videoRef} className="w-full h-full object-contain" autoPlay playsInline muted />
+                <video ref={videoRef} className="w-full h-full object-contain" autoPlay playsInline muted={"isSharing"} />
 
                 {!isConnected && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center animate-pulse pointer-events-none">
@@ -380,7 +386,7 @@ function App() {
         </div>
       )}
 
-      <footer className="p-4 text-center text-slate-600 text-xs shrink-0 z-10">ShareCast P2P &copy; 2025</footer>
+      <footer className="p-4 text-center text-slate-600 text-xs shrink-0 z-10">ShareCast P2P &copy; 2026</footer>
     </div>
   );
 }

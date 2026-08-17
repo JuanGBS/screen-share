@@ -7,18 +7,43 @@ class StreamService {
     this.myStream = null;
   }
 
-  // Inicializa o PeerJS
+  /**
+   * Inicializa o PeerJS com configurações de estabilidade e servidores STUN.
+   */
   init(onOpen, onStream, onError) {
     const id = uuidv4().substring(0, 5);
-    this.peer = new Peer(id, { debug: 1 });
+
+    this.peer = new Peer(id, {
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true, // Necessário para evitar erros de segurança no Firefox/Chrome
+      debug: 1,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ],
+        sdpSemantics: 'unified-plan'
+      }
+    });
 
     this.peer.on('open', onOpen);
-    this.peer.on('error', onError);
+    
+    this.peer.on('error', (err) => {
+      console.error("PeerJS Error:", err.type);
+      onError(err);
+    });
 
-    // Quando recebe uma chamada (alguém querendo assistir)
+    // Evento quando recebemos uma chamada (Alguém quer assistir)
     this.peer.on('call', (call) => {
-      call.answer();
+      // Respondemos com o hack de SDP para garantir áudio de alta qualidade
+      call.answer(null, {
+        sdpTransform: this._forceStereoAudio 
+      });
+
       call.on('stream', (remoteStream) => {
+        console.log("Stream recebido. Tracks:", remoteStream.getTracks());
         onStream(remoteStream);
       });
     });
@@ -26,61 +51,90 @@ class StreamService {
     return id;
   }
 
-  // Lógica de captura em duas etapas: 1. Mic -> 2. Tela + Áudio do Sistema
+  /**
+   * Captura Tela + Áudio do Sistema.
+   * Importante: No seletor do navegador, o usuário DEVE marcar "Compartilhar Áudio".
+   */
   async startCapture(config) {
     try {
-      // ETAPA 1: Microfone
-      const micStream = await navigator.mediaDevices.getUserMedia({
-        audio: config.audio ? { echoCancellation: true, noiseSuppression: true } : false
-      });
-
-      // ETAPA 2: Tela + Áudio do Sistema
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      const constraints = {
         video: {
           width: { ideal: config.quality === '1080' ? 1920 : 1280 },
           height: { ideal: config.quality === '1080' ? 1080 : 720 },
           frameRate: { max: 30 }
         },
-        audio: config.audio // O navegador pedirá permissão para o som do sistema aqui
-      });
+        audio: config.audio ? {
+          autoGainControl: false, // Desativa ajuste automático de volume
+          echoCancellation: false, // Desativa cancelamento de eco (estraga som de sistema)
+          noiseSuppression: false, // Desativa supressão de ruído
+          channelCount: 2          // Tenta capturar em Stereo
+        } : false
+      };
 
-      // Mesclando as faixas (Tracks)
-      const videoTrack = screenStream.getVideoTracks()[0];
-      const audioTracks = [
-        ...micStream.getAudioTracks(),
-        ...screenStream.getAudioTracks()
-      ];
+      const screenStream = await navigator.mediaDevices.getDisplayMedia(constraints);
 
-      this.myStream = new MediaStream([videoTrack, ...audioTracks]);
+      // Validação de áudio
+      if (config.audio && screenStream.getAudioTracks().length === 0) {
+        console.warn("Usuário não marcou o checkbox de áudio no navegador.");
+      }
+
+      this.myStream = screenStream;
       return this.myStream;
     } catch (err) {
-      console.error("Erro na captura:", err);
+      console.error("Erro ao capturar tela/áudio:", err);
       throw err;
     }
   }
 
-  // Conectar a um Host
+  /**
+   * Solicita a transmissão de um Host.
+   */
   connectToHost(targetId, myId) {
+    if (!this.peer) return;
+    
     const conn = this.peer.connect(targetId);
     conn.on('open', () => {
       conn.send({ type: 'request-stream', peerId: myId });
     });
   }
 
-  // Responder a pedidos de stream
+  /**
+   * Escuta pedidos de conexão e liga de volta enviando o vídeo.
+   */
   listenForRequests() {
+    if (!this.peer) return;
+
     this.peer.on('connection', (conn) => {
       conn.on('data', (data) => {
         if (data.type === 'request-stream' && this.myStream) {
-          this.peer.call(data.peerId, this.myStream);
+          console.log("Enviando stream para:", data.peerId);
+          
+          // Ligamos para o peer que pediu, aplicando o hack de áudio stereo no envio
+          this.peer.call(data.peerId, this.myStream, {
+            sdpTransform: this._forceStereoAudio
+          });
         }
       });
     });
   }
 
+  /**
+   * Hack de SDP: Força o WebRTC a usar Stereo e bitrate de 128kbps.
+   * Sem isso, o som do sistema soa abafado ou "mudo" (como se fosse voz).
+   */
+  _forceStereoAudio(sdp) {
+    return sdp.replace(
+      'useinbandfec=1',
+      'useinbandfec=1; stereo=1; maxaveragebitrate=128000'
+    );
+  }
+
+  /**
+   * Limpa recursos ao fechar.
+   */
   destroy() {
     if (this.myStream) {
-      this.myStream.getTracks().forEach(t => t.stop());
+      this.myStream.getTracks().forEach(track => track.stop());
     }
     if (this.peer) {
       this.peer.destroy();

@@ -49,14 +49,13 @@ function App() {
         if (videoRef.current) {
           videoRef.current.srcObject = remoteStream;
           videoRef.current.muted = false; 
-          videoRef.current.play().catch(e => console.error("Erro autoplay:", e));
+          videoRef.current.play().catch(e => {
+              console.error("Erro autoplay:", e);
+              setStatus("Clique no vídeo para ativar o som");
+          });
           setStatus('Recebendo transmissão');
           setIsConnected(true);
         }
-      });
-      call.on('close', () => {
-        setIsConnected(false);
-        setStatus('Transmissão encerrada');
       });
     });
 
@@ -139,15 +138,20 @@ function App() {
           height: { ideal: height },
           frameRate: { max: 30 }
         },
-        audio: config.audio // Liga/Desliga audio baseado no modal
+        audio: config.audio ? {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        } : false
       });
 
-      if (stream.getAudioTracks().lenght === 0 ){
-        console.warn("Nenhuma trila de audio foi encontrada. O usuário marcou 'Compartilhar Audio'?")
+      if (config.audio && stream.getAudioTracks().length === 0) {
+        alert("Atenção: Você não marcou a caixa 'Compartilhar Áudio' no diálogo do navegador.");
       }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = true; 
         videoRef.current.play();
       }
 
@@ -268,7 +272,7 @@ function App() {
                 onMouseMove={resetControlsTimeout} // Mover o mouse mostra os controles
                 className="relative w-full h-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group cursor-pointer"
               >
-                <video ref={videoRef} className="w-full h-full object-contain" autoPlay playsInline muted={"isSharing"} />
+                <video ref={videoRef} className="w-full h-full object-contain" autoPlay playsInline muted={isSharing} />
 
                 {!isConnected && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center animate-pulse pointer-events-none">

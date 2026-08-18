@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { streamService } from './services/streamService';
 import {
   Copy, Monitor, Play, CheckCircle2, Wifi,
-  Laptop2, Maximize, Minimize, Mic, MicOff, X, AlertTriangle, Volume2, VolumeX
+  Laptop2, Maximize, Minimize, Mic, MicOff, X, AlertTriangle, Volume2, VolumeX, Settings
 } from 'lucide-react';
 
 function App() {
@@ -418,18 +418,18 @@ function App() {
                </div>
             )}
 
-            {/* BOTÕES DE AÇÃO ABAIXO DA TELA */}
-            {isConnected && (
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="bg-red-600/80 hover:bg-red-600 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
-                  title={isSharing ? "Encerrar Transmissão" : "Sair da Transmissão"}
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            )}
+              {/* BOTÕES DE AÇÃO ABAIXO DA TELA */}
+              {isConnected && (
+                <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+                  <button
+                    onClick={() => setShowSetupModal(true)}
+                    className="bg-slate-800/80 hover:bg-slate-700 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
+                    title="Configurações"
+                  >
+                    <Settings size={24} />
+                  </button>
+                </div>
+              )}
           </div>
         </div>
       </main>
@@ -444,36 +444,41 @@ function App() {
                 <button onClick={() => setShowSetupModal(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
               </div>
 
-              <div className="space-y-4">
-                <div
-                  onClick={() => setConfig({...config, audio: !config.audio})}
-                  className="p-4 bg-black/20 rounded-xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-black/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    {config.audio ? <Volume2 className="text-green-400" size={20} /> : <MicOff className="text-red-400" size={20} />}
-                    <div>
-                      <div className="font-medium text-slate-200">Áudio do Sistema</div>
-                      <div className="text-[10px] text-slate-400">Captura o som de janelas ou abas</div>
-                    </div>
-                  </div>
-                  <div className={`w-10 h-5 rounded-full relative transition-colors ${config.audio ? 'bg-green-500' : 'bg-slate-600'}`}>
-                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.audio ? 'left-6' : 'left-1'}`} />
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3">Qualidade da Transmissão</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['480', '720', '1080'].map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => setConfig({...config, quality: q})}
+                        className={`p-3 rounded-xl border text-sm font-bold transition-all ${config.quality === q ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-slate-800 border-transparent hover:bg-slate-700 text-slate-400'}`}
+                      >
+                        {q}p
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 text-[11px] text-slate-300 space-y-2">
-                  <p className="font-bold text-blue-400 uppercase">Dicas para melhor áudio:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Selecione <b>"Janela"</b> ou <b>"Aba"</b>, não "Tela Inteira".</li>
-                    <li>No seletor do navegador, marque <b>"Compartilhar áudio"</b>.</li>
-                    <li>Feche aplicativos desnecessários que emitem som.</li>
-                  </ul>
+                <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/20 text-[11px] text-blue-200/70">
+                  <p className="font-bold text-blue-400 uppercase mb-1">Nota:</p>
+                  <p>A seleção de tela e áudio será feita diretamente pelo navegador no próximo passo.</p>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-4 mt-8">
-                <button onClick={() => setShowSetupModal(false)} className="text-slate-400 hover:underline text-sm font-medium">Cancelar</button>
-                <button onClick={confirmShare} className="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-lg font-bold shadow-lg transition-all">Entrar ao Vivo</button>
+              <div className="flex justify-between gap-4 mt-8">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-red-900/30 hover:bg-red-900/50 text-red-400 px-4 py-3 rounded-lg font-bold transition-all border border-red-900/50 text-sm"
+                >
+                  {isSharing ? 'Encerrar Transmissão' : 'Sair da Transmissão'}
+                </button>
+                <button
+                  onClick={confirmShare}
+                  className="bg-blue-600 hover:bg-blue-500 flex-1 px-8 py-3 rounded-lg font-bold shadow-lg transition-all text-sm"
+                >
+                  Entrar ao Vivo
+                </button>
               </div>
             </div>
           </div>

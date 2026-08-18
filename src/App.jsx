@@ -34,7 +34,15 @@ function App() {
   const [audioLevel, setAudioLevel] = useState(0);
   const [user, setUser] = useState(null);
 
-  // Lógica para processar o callback do Discord
+  // --- CARREGAR USUÁRIO PERSISTENTE ---
+  useEffect(() => {
+    const savedUser = localStorage.getItem('discord_user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  // --- LÓGICA PARA PROCESSAR CALLBACK E SALVAR ---
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -47,10 +55,17 @@ function App() {
       .then(res => res.json())
       .then(data => {
         setUser(data);
+        localStorage.setItem('discord_user', JSON.stringify(data)); // Salva
         window.history.replaceState({}, document.title, "/");
       });
     }
   }, []);
+
+  // --- LOGOUT ---
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('discord_user'); // Remove
+  };
 
   const loginDiscord = () => {
     const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID;
@@ -65,7 +80,7 @@ function App() {
       (remoteStream) => {
         if (videoRef.current) {
           videoRef.current.srcObject = remoteStream;
-          videoRef.current.muted = false;
+          videoRef.current.muted = true; // Força mudo inicialmente para evitar bloqueio do Firefox
 
           // Setup Analyser
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -87,10 +102,12 @@ function App() {
           };
           updateLevel();
 
-          videoRef.current.play().catch(err => {
-            console.warn("Autoplay bloqueado:", err);
-            setAudioBlocked(true);
-          });
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play().catch(err => {
+              console.warn("Autoplay bloqueado:", err);
+              setAudioBlocked(true);
+            });
+          };
 
           setIsConnected(true);
           setStatus('Assistindo');
@@ -133,7 +150,12 @@ function App() {
 
       // Agora passando o callback de novo espectador e o usuário host
       streamService.listenForRequests((viewer) => {
-        setViewers(prev => [...prev, viewer]);
+        setViewers(prev => {
+          // Garante que criamos um novo array
+          const next = [...prev, viewer];
+          console.log("Novo estado de viewers:", next);
+          return next;
+        });
       }, user);
       setIsSharing(true);
       setIsConnected(true);
@@ -170,7 +192,7 @@ function App() {
   const handleConnect = () => {
     if (!targetPeerId) return;
     setStatus('Conectando...');
-    streamService.connectToHost(targetPeerId, myPeerId);
+    streamService.connectToHost(targetPeerId, myPeerId, user);
   };
 
   const copyToClipboard = () => {
@@ -203,7 +225,11 @@ function App() {
 
           <div className="flex items-center gap-4">
             {user ? (
-              <div className="flex items-center gap-3 bg-slate-800 p-1.5 pr-4 rounded-full border border-slate-700">
+              <div
+                onClick={handleLogout}
+                className="flex items-center gap-3 bg-slate-800 p-1.5 pr-4 rounded-full border border-slate-700 cursor-pointer hover:bg-slate-700 transition-all"
+                title="Clique para sair"
+              >
                 <img src={`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`} className="w-8 h-8 rounded-full" alt="Avatar" />
                 <span className="text-sm font-medium">{user.username}</span>
               </div>
@@ -249,9 +275,17 @@ function App() {
                 <div className="space-y-2">
                   {viewers.map((viewer, i) => (
                     <div key={i} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
-                      <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center text-[10px] font-bold">
-                        {viewer.username ? viewer.username[0].toUpperCase() : '?'}
-                      </div>
+                      {viewer.avatar ? (
+                        <img
+                          src={`https://cdn.discordapp.com/avatars/${viewer.userId}/${viewer.avatar}.png`}
+                          className="w-6 h-6 rounded-full"
+                          alt="Avatar"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center text-[10px] font-bold">
+                          {viewer.username ? viewer.username[0].toUpperCase() : '?'}
+                        </div>
+                      )}
                       <span className="text-sm text-slate-300">{viewer.username || 'Anônimo'}</span>
                     </div>
                   ))}
@@ -400,7 +434,7 @@ function App() {
       )}
 
       <footer className="p-4 text-center text-slate-600 text-[10px] uppercase tracking-[0.2em] shrink-0">
-        ShareCast P2P &copy; 2024
+        ShareCast P2P &copy; 2026
       </footer>
     </div>
   );

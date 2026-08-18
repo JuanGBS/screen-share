@@ -19,6 +19,7 @@ class StreamService {
       secure: true, // Necessário para evitar erros de segurança no Firefox/Chrome
       debug: 1,
       config: {
+        
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
@@ -35,10 +36,10 @@ class StreamService {
       onError(err);
     });
 
-  // Evento quando recebemos uma chamada (Alguém quer assistir)
+    // Evento quando recebemos uma chamada (Alguém quer assistir)
     this.peer.on('call', (call) => {
-      // Respondemos com o hack de SDP para garantir áudio de alta qualidade
-      call.answer(null, {
+      // Respondemos com o stream do host e o hack de SDP
+      call.answer(this.myStream, {
         sdpTransform: this._forceStereoAudio
       });
 
@@ -94,12 +95,18 @@ class StreamService {
   /**
    * Solicita a transmissão de um Host.
    */
-  connectToHost(targetId, myId) {
+  connectToHost(targetId, myId, user) {
     if (!this.peer) return;
-    
+
     const conn = this.peer.connect(targetId);
     conn.on('open', () => {
-      conn.send({ type: 'request-stream', peerId: myId });
+      conn.send({
+        type: 'request-stream',
+        peerId: myId,
+        username: user?.username || 'Anônimo',
+        userId: user?.id,
+        avatar: user?.avatar
+      });
     });
   }
 
@@ -114,10 +121,16 @@ class StreamService {
       conn.on('data', (data) => {
         if (data.type === 'request-stream' && this.myStream) {
           console.log("Enviando stream para:", data.peerId);
+          console.log("Dados do espectador recebidos:", data); // DEBUG
 
           // Chamamos o callback informando o espectador
           if (onNewViewer) {
-             onNewViewer({ peerId: data.peerId, username: data.username || 'Anônimo' });
+             onNewViewer({
+                peerId: data.peerId,
+                username: data.username || 'Anônimo',
+                userId: data.userId, // Certifique-se que estes campos estão vindo
+                avatar: data.avatar
+             });
           }
 
           // Enviamos os dados do host como metadados na chamada

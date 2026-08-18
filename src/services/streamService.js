@@ -35,11 +35,16 @@ class StreamService {
       onError(err);
     });
 
-    // Evento quando recebemos uma chamada (Alguém quer assistir)
+  // Evento quando recebemos uma chamada (Alguém quer assistir)
     this.peer.on('call', (call) => {
       // Respondemos com o hack de SDP para garantir áudio de alta qualidade
       call.answer(null, {
-        sdpTransform: this._forceStereoAudio 
+        sdpTransform: this._forceStereoAudio
+      });
+
+      // Se o chamador enviar metadados (como o usuário do Discord), podemos capturá-los aqui
+      call.on('open', () => {
+        console.log("Chamada aberta. Metadados do espectador:", call.metadata);
       });
 
       call.on('stream', (remoteStream) => {
@@ -100,18 +105,25 @@ class StreamService {
 
   /**
    * Escuta pedidos de conexão e liga de volta enviando o vídeo.
+   * Agora aceita o usuário do host para passar metadados.
    */
-  listenForRequests() {
+  listenForRequests(onNewViewer, hostUser) {
     if (!this.peer) return;
 
     this.peer.on('connection', (conn) => {
       conn.on('data', (data) => {
         if (data.type === 'request-stream' && this.myStream) {
           console.log("Enviando stream para:", data.peerId);
-          
-          // Ligamos para o peer que pediu, aplicando o hack de áudio stereo no envio
+
+          // Chamamos o callback informando o espectador
+          if (onNewViewer) {
+             onNewViewer({ peerId: data.peerId, username: data.username || 'Anônimo' });
+          }
+
+          // Enviamos os dados do host como metadados na chamada
           this.peer.call(data.peerId, this.myStream, {
-            sdpTransform: this._forceStereoAudio
+            sdpTransform: this._forceStereoAudio,
+            metadata: { host: hostUser }
           });
         }
       });

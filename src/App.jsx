@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { streamService } from './services/streamService';
-import { 
-  Copy, Monitor, Play, CheckCircle2, Wifi, 
-  Laptop2, Maximize, Minimize, Mic, MicOff, X, AlertTriangle, Volume2
+import {
+  Copy, Monitor, Play, CheckCircle2, Wifi,
+  Laptop2, Maximize, Minimize, Mic, MicOff, X, AlertTriangle, Volume2, VolumeX
 } from 'lucide-react';
 
 function App() {
@@ -14,6 +14,9 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewers, setViewers] = useState([]); // <--- Adicionando estado dos viewers
+  const [isMuted, setIsMuted] = useState(false); // <--- Adicionando estados faltantes
+  const [volume, setVolume] = useState(1);       // <--- Adicionando estados faltantes
   
   // Estados de Interface e Áudio
   const [showControls, setShowControls] = useState(true);
@@ -25,20 +28,68 @@ function App() {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
+  const audioContextRef = useRef(null); // Ref para o contexto de áudio
+  const analyserRef = useRef(null);     // Ref para o analisador de áudio
+  const animationFrameRef = useRef(null); // Ref para o loop de animação
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [user, setUser] = useState(null);
 
-  // --- INICIALIZAÇÃO ---
+  // Lógica para processar o callback do Discord
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    if (code) {
+      fetch('http://localhost:3001/api/auth/discord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      })
+      .then(res => res.json())
+      .then(data => {
+        setUser(data);
+        window.history.replaceState({}, document.title, "/");
+      });
+    }
+  }, []);
+
+  const loginDiscord = () => {
+    const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID;
+    const REDIRECT_URI = encodeURIComponent(import.meta.env.VITE_DISCORD_REDIRECT_URI || 'http://localhost:5173/callback');
+    window.location.href = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=identify`;
+  };
+
+  // Lógica de áudio no useEffect
   useEffect(() => {
     streamService.init(
-      (id) => setMyPeerId(id), 
-      (remoteStream) => {      
+      (id) => setMyPeerId(id),
+      (remoteStream) => {
         if (videoRef.current) {
           videoRef.current.srcObject = remoteStream;
-          videoRef.current.muted = false; // Garante que não está mutado para o ouvinte
-          
-          // Tenta dar play com áudio
+          videoRef.current.muted = false;
+
+          // Setup Analyser
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const source = audioContext.createMediaStreamSource(remoteStream);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+
+          audioContextRef.current = audioContext;
+          analyserRef.current = analyser;
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const updateLevel = () => {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            setAudioLevel(sum / dataArray.length);
+            animationFrameRef.current = requestAnimationFrame(updateLevel);
+          };
+          updateLevel();
+
           videoRef.current.play().catch(err => {
-            console.warn("Autoplay bloqueado pelo navegador:", err);
-            setAudioBlocked(true); // Ativa o botão de "Ativar Som"
+            console.warn("Autoplay bloqueado:", err);
+            setAudioBlocked(true);
           });
 
           setIsConnected(true);
@@ -54,6 +105,8 @@ function App() {
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       streamService.destroy();
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioContextRef.current) audioContextRef.current.close();
     };
   }, []);
 
@@ -71,14 +124,17 @@ function App() {
     setStatus('Iniciando captura...');
     try {
       const stream = await streamService.startCapture(config);
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.muted = true; // Host mudo para evitar eco
         videoRef.current.play();
       }
 
-      streamService.listenForRequests();
+      // Agora passando o callback de novo espectador e o usuário host
+      streamService.listenForRequests((viewer) => {
+        setViewers(prev => [...prev, viewer]);
+      }, user);
       setIsSharing(true);
       setIsConnected(true);
       setStatus('Transmitindo');
@@ -94,11 +150,20 @@ function App() {
     }
   };
 
-  const unmuteManual = () => {
+  const toggleMute = () => {
     if (videoRef.current) {
-      videoRef.current.muted = false;
-      videoRef.current.play();
-      setAudioBlocked(false);
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
+    }
+  };
+
+  const handleVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+      setIsMuted(newVolume === 0);
+      videoRef.current.muted = newVolume === 0;
     }
   };
 
@@ -135,10 +200,24 @@ function App() {
             </div>
             <h1 className="text-xl font-bold tracking-tight">Share<span className="text-blue-400">Cast</span></h1>
           </div>
-          <div className="bg-slate-800/80 px-4 py-1.5 rounded-full border border-slate-700 text-xs font-medium text-slate-300">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`} />
-              {status}
+
+          <div className="flex items-center gap-4">
+            {user ? (
+              <div className="flex items-center gap-3 bg-slate-800 p-1.5 pr-4 rounded-full border border-slate-700">
+                <img src={`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`} className="w-8 h-8 rounded-full" alt="Avatar" />
+                <span className="text-sm font-medium">{user.username}</span>
+              </div>
+            ) : (
+              <button onClick={loginDiscord} className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-full text-sm font-bold transition-all">
+                Entrar com Discord
+              </button>
+            )}
+
+            <div className="bg-slate-800/80 px-4 py-1.5 rounded-full border border-slate-700 text-xs font-medium text-slate-300">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`} />
+                {status}
+              </div>
             </div>
           </div>
         </div>
@@ -163,10 +242,27 @@ function App() {
               </div>
             </div>
 
+            {/* LISTA DE VIEWERS */}
+            {isSharing && (
+              <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl">
+                <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Espectadores ({viewers.length})</h3>
+                <div className="space-y-2">
+                  {viewers.map((viewer, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
+                      <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center text-[10px] font-bold">
+                        {viewer.username ? viewer.username[0].toUpperCase() : '?'}
+                      </div>
+                      <span className="text-sm text-slate-300">{viewer.username || 'Anônimo'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl flex flex-col gap-4">
               {!isSharing && !isConnected && (
-                <button 
-                  onClick={() => setShowSetupModal(true)} 
+                <button
+                  onClick={() => setShowSetupModal(true)}
                   className="w-full h-14 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl font-bold flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
                 >
                   <Laptop2 size={20} /> Compartilhar Tela
@@ -174,8 +270,8 @@ function App() {
               )}
 
               <div className="flex gap-2">
-                <input 
-                  placeholder="ID do Amigo..." 
+                <input
+                  placeholder="ID do Amigo..."
                   value={targetPeerId}
                   onChange={e => setTargetPeerId(e.target.value)}
                   className="flex-1 bg-black/40 border border-white/5 p-4 rounded-xl outline-none focus:border-blue-500 transition-colors"
@@ -225,10 +321,27 @@ function App() {
             {isConnected && showControls && (
                <div className="absolute inset-0 flex items-end justify-between p-6 pointer-events-none">
                   <div className="bg-red-600 px-3 py-1 rounded flex items-center gap-2 shadow-lg">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                    <div className={`w-2 h-2 rounded-full bg-white ${audioLevel > 10 ? 'animate-ping' : ''}`} />
                     <span className="text-[10px] font-bold uppercase tracking-widest">Ao Vivo</span>
                   </div>
-                  <button 
+
+            {/* CONTROLE DE VOLUME - DISPONÍVEL APENAS PARA O ESPECTADOR */}
+                  {!isSharing && (
+                  <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md p-2 rounded-full border border-white/10 pointer-events-auto">
+                    <button onClick={toggleMute} className="text-white hover:text-blue-400 transition-colors">
+                      {isMuted || volume === 0 ? <VolumeX className="text-red-400" size={20} /> : <Volume2 size={20} />}
+                    </button>
+                    <input
+                      type="range"
+                      min="0" max="1" step="0.1"
+                      value={volume}
+                      onChange={handleVolumeChange}
+                      className="w-20 accent-blue-500 cursor-pointer"
+                    />
+                  </div>
+                  )}
+
+                  <button
                     onClick={toggleFullscreen}
                     className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md border border-white/10 transition-all pointer-events-auto active:scale-90"
                   >
@@ -250,29 +363,31 @@ function App() {
                 <button onClick={() => setShowSetupModal(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
               </div>
 
-              <div className="space-y-6">
-                <div 
-                  onClick={() => setConfig({...config, audio: !config.audio})} 
+              <div className="space-y-4">
+                <div
+                  onClick={() => setConfig({...config, audio: !config.audio})}
                   className="p-4 bg-black/20 rounded-xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-black/30 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {config.audio ? <Volume2 className="text-green-400" size={20} /> : <MicOff className="text-red-400" size={20} />}
-                    <span className="font-medium text-slate-200">Áudio do Sistema</span>
+                    <div>
+                      <div className="font-medium text-slate-200">Áudio do Sistema</div>
+                      <div className="text-[10px] text-slate-400">Captura o som de janelas ou abas</div>
+                    </div>
                   </div>
                   <div className={`w-10 h-5 rounded-full relative transition-colors ${config.audio ? 'bg-green-500' : 'bg-slate-600'}`}>
                     <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.audio ? 'left-6' : 'left-1'}`} />
                   </div>
                 </div>
 
-                {config.audio && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl flex gap-3">
-                    <AlertTriangle className="text-amber-500 shrink-0" size={20} />
-                    <div className="text-[11px] text-amber-200 leading-relaxed">
-                      <p className="font-bold uppercase mb-1">Aviso Crítico:</p>
-                      <p>Para o áudio funcionar, selecione uma <b className="text-white">Aba</b> ou <b className="text-white">Tela Inteira</b> e marque o checkbox <b className="text-white">"Compartilhar áudio"</b> no seletor do navegador.</p>
-                    </div>
-                  </div>
-                )}
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 text-[11px] text-slate-300 space-y-2">
+                  <p className="font-bold text-blue-400 uppercase">Dicas para melhor áudio:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Selecione <b>"Janela"</b> ou <b>"Aba"</b>, não "Tela Inteira".</li>
+                    <li>No seletor do navegador, marque <b>"Compartilhar áudio"</b>.</li>
+                    <li>Feche aplicativos desnecessários que emitem som.</li>
+                  </ul>
+                </div>
               </div>
 
               <div className="flex justify-end gap-4 mt-8">

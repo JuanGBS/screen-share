@@ -58,6 +58,23 @@ class StreamService {
   }
 
   /**
+   * Atualiza o stream de vídeo nas chamadas ativas.
+   */
+  updateStream(newStream) {
+    this.myStream = newStream;
+    // Itera sobre todas as conexões de chamada ativas e substitui as trilhas
+    Object.values(this.peer.connections).forEach(conns => {
+      conns.forEach(conn => {
+        if (conn.peerConnection) {
+          const videoTrack = newStream.getVideoTracks()[0];
+          const sender = conn.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) sender.replaceTrack(videoTrack);
+        }
+      });
+    });
+  }
+
+  /**
    * Captura Tela + Áudio do Sistema.
    * Importante: No seletor do navegador, o usuário DEVE marcar "Compartilhar Áudio".
    */

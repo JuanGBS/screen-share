@@ -136,6 +136,24 @@ function App() {
   }, [isConnected]);
 
   // --- AÇÕES ---
+  const changeScreen = async () => {
+    try {
+      const newStream = await streamService.startCapture(config);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+      }
+
+      streamService.updateStream(newStream);
+
+      newStream.getVideoTracks()[0].onended = () => {
+        // Opcional: tratar quando a nova tela é fechada
+      };
+    } catch (err) {
+      console.error("Falha ao trocar de tela:", err);
+    }
+  };
+
   const confirmShare = async () => {
     setShowSetupModal(false);
     setStatus('Iniciando captura...');
@@ -420,7 +438,7 @@ function App() {
 
               {/* BOTÕES DE AÇÃO ABAIXO DA TELA */}
               {isConnected && (
-                <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+                <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 pointer-events-none">
                   <button
                     onClick={() => setShowSetupModal(true)}
                     className="bg-slate-800/80 hover:bg-slate-700 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
@@ -428,6 +446,15 @@ function App() {
                   >
                     <Settings size={24} />
                   </button>
+                  {isSharing && (
+                    <button
+                      onClick={changeScreen}
+                      className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
+                      title="Trocar Tela"
+                    >
+                      <Laptop2 size={24} />
+                    </button>
+                  )}
                 </div>
               )}
           </div>

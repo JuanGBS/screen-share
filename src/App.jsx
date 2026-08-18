@@ -251,77 +251,79 @@ function App() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 w-full flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 h-full items-center">
-          
-          {/* LADO ESQUERDO: PAINEL DE CONTROLE */}
-          <div className="lg:col-span-4 order-2 lg:order-1 flex flex-col gap-6">
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl">
-              <div className="flex items-center gap-2 mb-3 text-slate-400">
-                <Wifi className="w-4 h-4 text-blue-400" />
-                <span className="text-[10px] uppercase font-bold tracking-widest">Seu ID P2P</span>
-              </div>
-              <div className="flex gap-2">
-                <input readOnly value={myPeerId} className="flex-1 bg-black/40 border border-white/5 p-3 rounded-xl font-mono text-center outline-none text-blue-400 text-xl" />
-                <button onClick={copyToClipboard} className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 border border-white/10 transition-colors">
-                  {copied ? <CheckCircle2 className="text-green-400" size={20} /> : <Copy size={20} />}
-                </button>
-              </div>
-            </div>
+        <div className={`w-full max-w-7xl grid gap-8 h-full items-center ${isSharing ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-12'}`}>
 
-            {/* LISTA DE VIEWERS */}
-            {isSharing && (
+          {/* LADO ESQUERDO: PAINEL DE CONTROLE - OCULTAR QUANDO COMPARTILHANDO */}
+          {!isSharing && (
+            <div className="lg:col-span-4 order-2 lg:order-1 flex flex-col gap-6">
               <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl">
-                <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Espectadores ({viewers.length})</h3>
-                <div className="space-y-2">
-                  {viewers.map((viewer, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
-                      {viewer.avatar ? (
-                        <img
-                          src={`https://cdn.discordapp.com/avatars/${viewer.userId}/${viewer.avatar}.png`}
-                          className="w-6 h-6 rounded-full"
-                          alt="Avatar"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center text-[10px] font-bold">
-                          {viewer.username ? viewer.username[0].toUpperCase() : '?'}
-                        </div>
-                      )}
-                      <span className="text-sm text-slate-300">{viewer.username || 'Anônimo'}</span>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2 mb-3 text-slate-400">
+                  <Wifi className="w-4 h-4 text-blue-400" />
+                  <span className="text-[10px] uppercase font-bold tracking-widest">Seu ID P2P</span>
+                </div>
+                <div className="flex gap-2">
+                  <input readOnly value={myPeerId} className="flex-1 bg-black/40 border border-white/5 p-3 rounded-xl font-mono text-center outline-none text-blue-400 text-xl" />
+                  <button onClick={copyToClipboard} className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 border border-white/10 transition-colors">
+                    {copied ? <CheckCircle2 className="text-green-400" size={20} /> : <Copy size={20} />}
+                  </button>
                 </div>
               </div>
-            )}
 
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl flex flex-col gap-4">
-              {!isSharing && !isConnected && (
-                <button
-                  onClick={() => setShowSetupModal(true)}
-                  className="w-full h-14 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl font-bold flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
-                >
-                  <Laptop2 size={20} /> Compartilhar Tela
-                </button>
+              {/* LISTA DE VIEWERS */}
+              {isSharing && (
+                <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl">
+                  <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Espectadores ({viewers.length})</h3>
+                  <div className="space-y-2">
+                    {viewers.map((viewer, i) => (
+                      <div key={i} className="flex items-center gap-3 bg-black/20 p-2 rounded-lg">
+                        {viewer.avatar ? (
+                          <img
+                            src={`https://cdn.discordapp.com/avatars/${viewer.userId}/${viewer.avatar}.png`}
+                            className="w-6 h-6 rounded-full"
+                            alt="Avatar"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center text-[10px] font-bold">
+                            {viewer.username ? viewer.username[0].toUpperCase() : '?'}
+                          </div>
+                        )}
+                        <span className="text-sm text-slate-300">{viewer.username || 'Anônimo'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
-              <div className="flex gap-2">
-                <input
-                  placeholder="ID do Amigo..."
-                  value={targetPeerId}
-                  onChange={e => setTargetPeerId(e.target.value)}
-                  className="flex-1 bg-black/40 border border-white/5 p-4 rounded-xl outline-none focus:border-blue-500 transition-colors"
-                />
-                <button onClick={handleConnect} className="p-4 bg-green-600 hover:bg-green-500 rounded-xl shadow-lg flex items-center justify-center min-w-[64px] transition-colors">
-                  <Play fill="currentColor" size={24} />
-                </button>
+              <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl flex flex-col gap-4">
+                {!isSharing && !isConnected && (
+                  <button
+                    onClick={() => setShowSetupModal(true)}
+                    className="w-full h-14 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl font-bold flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+                  >
+                    <Laptop2 size={20} /> Compartilhar Tela
+                  </button>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    placeholder="ID do Amigo..."
+                    value={targetPeerId}
+                    onChange={e => setTargetPeerId(e.target.value)}
+                    className="flex-1 bg-black/40 border border-white/5 p-4 rounded-xl outline-none focus:border-blue-500 transition-colors"
+                  />
+                  <button onClick={handleConnect} className="p-4 bg-green-600 hover:bg-green-500 rounded-xl shadow-lg flex items-center justify-center min-w-[64px] transition-colors">
+                    <Play fill="currentColor" size={24} />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* LADO DIREITO: PLAYER DE VÍDEO */}
-          <div 
+          <div
             ref={videoContainerRef}
             onMouseMove={resetControlsTimeout}
-            className="lg:col-span-8 order-1 lg:order-2 aspect-video bg-black rounded-2xl border border-white/10 relative overflow-hidden group shadow-2xl"
+            className={`order-1 lg:order-2 aspect-video bg-black rounded-2xl border border-white/10 relative overflow-hidden group shadow-2xl ${isSharing ? 'lg:col-span-12' : 'lg:col-span-8'}`}
           >
             <video 
               ref={videoRef} 
@@ -353,35 +355,80 @@ function App() {
 
             {/* OVERLAY DE CONTROLES */}
             {isConnected && showControls && (
-               <div className="absolute inset-0 flex items-end justify-between p-6 pointer-events-none">
-                  <div className="bg-red-600 px-3 py-1 rounded flex items-center gap-2 shadow-lg">
-                    <div className={`w-2 h-2 rounded-full bg-white ${audioLevel > 10 ? 'animate-ping' : ''}`} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Ao Vivo</span>
+               <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none">
+                  <div className="flex justify-between items-start">
+                    <div className="bg-red-600 px-3 py-1 rounded flex items-center gap-2 shadow-lg">
+                      <div className={`w-2 h-2 rounded-full bg-white ${audioLevel > 10 ? 'animate-ping' : ''}`} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Ao Vivo</span>
+                    </div>
+
+                    {/* VISTA DE VIEWERS E ID P2P NO CANTO SUPERIOR DIREITO */}
+                    <div className="flex gap-4 items-center pointer-events-auto">
+                      <button
+                        onClick={copyToClipboard}
+                        className="flex items-center gap-2 bg-black/40 hover:bg-black/60 px-3 py-1.5 rounded-full border border-white/10 text-xs transition-all"
+                        title="Copiar seu ID de Transmissão"
+                      >
+                        <span className="font-mono text-blue-400">{myPeerId}</span>
+                        {copied ? <CheckCircle2 size={14} className="text-green-400" /> : <Copy size={14} />}
+                      </button>
+
+                      <div className="flex -space-x-2">
+                        {viewers.map((viewer, i) => (
+                          <div key={i} className="relative group">
+                            <img
+                              src={viewer.avatar ? `https://cdn.discordapp.com/avatars/${viewer.userId}/${viewer.avatar}.png` : 'https://via.placeholder.com/32'}
+                              className="w-8 h-8 rounded-full border-2 border-[#0f172a]"
+                              alt={viewer.username}
+                              title={viewer.username}
+                            />
+                            <div className="absolute bottom-full mb-2 hidden group-hover:block bg-black px-2 py-1 rounded text-xs whitespace-nowrap">
+                              {viewer.username}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
-            {/* CONTROLE DE VOLUME - DISPONÍVEL APENAS PARA O ESPECTADOR */}
-                  {!isSharing && (
-                  <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md p-2 rounded-full border border-white/10 pointer-events-auto">
-                    <button onClick={toggleMute} className="text-white hover:text-blue-400 transition-colors">
-                      {isMuted || volume === 0 ? <VolumeX className="text-red-400" size={20} /> : <Volume2 size={20} />}
+                  <div className="flex justify-between items-center">
+                    {/* CONTROLE DE VOLUME - DISPONÍVEL APENAS PARA O ESPECTADOR */}
+                    {!isSharing && (
+                      <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md p-2 rounded-full border border-white/10 pointer-events-auto">
+                        <button onClick={toggleMute} className="text-white hover:text-blue-400 transition-colors">
+                          {isMuted || volume === 0 ? <VolumeX className="text-red-400" size={20} /> : <Volume2 size={20} />}
+                        </button>
+                        <input
+                          type="range"
+                          min="0" max="1" step="0.1"
+                          value={volume}
+                          onChange={handleVolumeChange}
+                          className="w-20 accent-blue-500 cursor-pointer"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md border border-white/10 transition-all pointer-events-auto active:scale-90 ml-auto"
+                    >
+                      {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
                     </button>
-                    <input
-                      type="range"
-                      min="0" max="1" step="0.1"
-                      value={volume}
-                      onChange={handleVolumeChange}
-                      className="w-20 accent-blue-500 cursor-pointer"
-                    />
                   </div>
-                  )}
-
-                  <button
-                    onClick={toggleFullscreen}
-                    className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md border border-white/10 transition-all pointer-events-auto active:scale-90"
-                  >
-                    {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
-                  </button>
                </div>
+            )}
+
+            {/* BOTÕES DE AÇÃO ABAIXO DA TELA */}
+            {isConnected && (
+              <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-red-600/80 hover:bg-red-600 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
+                  title={isSharing ? "Encerrar Transmissão" : "Sair da Transmissão"}
+                >
+                  <X size={24} />
+                </button>
+              </div>
             )}
           </div>
         </div>

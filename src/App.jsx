@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { streamService } from './services/streamService';
 import {
   Copy, Monitor, Play, CheckCircle2, Wifi,
-  Laptop2, Maximize, Minimize, Mic, MicOff, X, AlertTriangle, Volume2, VolumeX, Settings
+  Laptop2, Maximize, Minimize, Mic, MicOff, X, AlertTriangle, Volume2, VolumeX, Settings, LogOut
 } from 'lucide-react';
 
 function App() {
@@ -140,6 +140,16 @@ function App() {
   }, [isConnected]);
 
   // --- AÇÕES ---
+  const handleExitTransmission = () => {
+    streamService.destroy();
+    setIsConnected(false);
+    setIsSharing(false);
+    setTargetPeerId('');
+    setStatus('Pronto');
+    if (videoRef.current) videoRef.current.srcObject = null;
+    window.location.reload(); // Garante o reset do estado da aplicação
+  };
+
   const changeScreen = async () => {
     try {
       const newStream = await streamService.startCapture(config);
@@ -167,16 +177,26 @@ function App() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.muted = true; // Host mudo para evitar eco
-        videoRef.current.play();
+        videoRef.current.play().catch(e => console.error("Erro ao reproduzir vídeo:", e));
       }
+
+      const unmuteManual = () => {
+        if (videoRef.current) {
+          videoRef.current.muted = false;
+          setAudioBlocked(false);
+          videoRef.current.play().catch(e => console.error("Erro ao reproduzir vídeo:", e));
+        }
+      };
 
       // Agora passando o callback de novo espectador e o usuário host
       streamService.listenForRequests((viewer) => {
         setViewers(prev => {
-          // Garante que criamos um novo array
-          const next = [...prev, viewer];
-          console.log("Novo estado de viewers:", next);
-          return next;
+          const exists = prev.find(v => v.peerId === viewer.peerId);
+          if (exists) return prev;
+          const newList = [...prev, viewer];
+          // Sincroniza a lista com todos os espectadores
+          streamService.broadcastViewers(newList);
+          return newList;
         });
       }, user);
       setIsSharing(true);
@@ -214,6 +234,12 @@ function App() {
   const handleConnect = () => {
     if (!targetPeerId) return;
     setStatus('Conectando...');
+
+    // Configura callback para receber atualizações de viewers do host
+    streamService.onViewersUpdate = (updatedViewers) => {
+      setViewers(updatedViewers);
+    };
+
     streamService.connectToHost(targetPeerId, myPeerId, user);
   };
 
@@ -275,8 +301,8 @@ function App() {
       <main className="flex-1 w-full flex flex-col items-center justify-center p-4">
         <div className={`w-full max-w-7xl grid gap-8 h-full items-center ${isSharing ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-12'}`}>
 
-          {/* LADO ESQUERDO: PAINEL DE CONTROLE - OCULTAR QUANDO COMPARTILHANDO */}
-          {!isSharing && (
+          {/* LADO ESQUERDO: PAINEL DE CONTROLE - OCULTAR QUANDO COMPARTILHANDO OU ASSISTINDO */}
+          {!isSharing && !isConnected && (
             <div className="lg:col-span-4 order-2 lg:order-1 flex flex-col gap-6">
               <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl">
                 <div className="flex items-center gap-2 mb-3 text-slate-400">
@@ -345,7 +371,7 @@ function App() {
           <div
             ref={videoContainerRef}
             onMouseMove={resetControlsTimeout}
-            className={`order-1 lg:order-2 aspect-video bg-black rounded-2xl border border-white/10 relative overflow-hidden group shadow-2xl ${isSharing ? 'lg:col-span-12' : 'lg:col-span-8'}`}
+            className={`order-1 lg:order-2 aspect-video bg-black rounded-2xl border border-white/10 relative overflow-hidden group shadow-2xl ${(isSharing || isConnected) ? 'lg:col-span-12' : 'lg:col-span-8'}`}
           >
             <video 
               ref={videoRef} 
@@ -395,21 +421,23 @@ function App() {
                         {copied ? <CheckCircle2 size={14} className="text-green-400" /> : <Copy size={14} />}
                       </button>
 
-                      <div className="flex -space-x-2">
-                        {viewers.map((viewer, i) => (
-                          <div key={i} className="relative group">
-                            <img
-                              src={viewer.avatar ? `https://cdn.discordapp.com/avatars/${viewer.userId}/${viewer.avatar}.png` : 'https://via.placeholder.com/32'}
-                              className="w-8 h-8 rounded-full border-2 border-[#0f172a]"
-                              alt={viewer.username}
-                              title={viewer.username}
-                            />
-                            <div className="absolute bottom-full mb-2 hidden group-hover:block bg-black px-2 py-1 rounded text-xs whitespace-nowrap">
-                              {viewer.username}
+                      {viewers.length > 0 && (
+                        <div className="flex -space-x-2">
+                          {viewers.map((viewer, i) => (
+                            <div key={i} className="relative group">
+                              <img
+                                src={viewer.avatar ? `https://cdn.discordapp.com/avatars/${viewer.userId}/${viewer.avatar}.png` : 'https://via.placeholder.com/32'}
+                                className="w-8 h-8 rounded-full border-2 border-[#0f172a]"
+                                alt={viewer.username}
+                                title={viewer.username}
+                              />
+                              <div className="absolute bottom-full mb-2 hidden group-hover:block bg-black px-2 py-1 rounded text-xs whitespace-nowrap">
+                                {viewer.username}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -443,13 +471,25 @@ function App() {
               {/* BOTÕES DE AÇÃO ABAIXO DA TELA */}
               {isConnected && (
                 <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 pointer-events-none">
-                  <button
-                    onClick={() => setShowSetupModal(true)}
-                    className="bg-slate-800/80 hover:bg-slate-700 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
-                    title="Configurações"
-                  >
-                    <Settings size={24} />
-                  </button>
+                  {/* Botão de Configurações - Visível apenas para o Host */}
+                  {!isSharing && isConnected && (
+                    <button
+                      onClick={handleExitTransmission}
+                      className="bg-red-600/80 hover:bg-red-500 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
+                      title="Sair da transmissão"
+                    >
+                      <LogOut size={24} />
+                    </button>
+                  )}
+                  {isSharing && (
+                    <button
+                      onClick={() => setShowSetupModal(true)}
+                      className="bg-slate-800/80 hover:bg-slate-700 text-white p-3 rounded-full pointer-events-auto transition-all shadow-lg border border-white/10"
+                      title="Configurações"
+                    >
+                      <Settings size={24} />
+                    </button>
+                  )}
                   {isSharing && (
                     <button
                       onClick={changeScreen}

@@ -44,7 +44,10 @@ class StreamService {
 
       // Se o chamador enviar metadados (como o usuário do Discord), podemos capturá-los aqui
       call.on('open', () => {
-        console.log("Chamada aberta. Metadados do espectador:", call.metadata);
+        console.log("Chamada aberta. Metadados do host:", call.metadata);
+        if (call.metadata?.host) {
+            onStream(call.metadata.host); // Passa o host como um objeto especial para a UI mostrar
+        }
       });
 
       call.on('stream', (remoteStream) => {
@@ -124,6 +127,16 @@ class StreamService {
         avatar: user?.avatar
       });
     });
+
+    // Escuta atualizações da lista de espectadores enviadas pelo Host
+    conn.on('data', (data) => {
+      if (data.type === 'viewers-update') {
+        console.log("Lista de espectadores atualizada:", data.viewers);
+        if (this.onViewersUpdate) this.onViewersUpdate(data.viewers);
+      }
+    });
+
+    this.hostConn = conn;
   }
 
   /**
@@ -137,22 +150,40 @@ class StreamService {
       conn.on('data', (data) => {
         if (data.type === 'request-stream' && this.myStream) {
           console.log("Enviando stream para:", data.peerId);
-          console.log("Dados do espectador recebidos:", data); // DEBUG
 
-          // Chamamos o callback informando o espectador
           if (onNewViewer) {
              onNewViewer({
                 peerId: data.peerId,
                 username: data.username || 'Anônimo',
-                userId: data.userId, // Certifique-se que estes campos estão vindo
-                avatar: data.avatar
+                userId: data.userId,
+                avatar: data.avatar,
+                conn: conn // Guarda a conexão para enviar updates depois
              });
           }
 
-          // Enviamos os dados do host como metadados na chamada
           this.peer.call(data.peerId, this.myStream, {
             sdpTransform: this._forceStereoAudio,
             metadata: { host: hostUser }
+          });
+        }
+      });
+    });
+  }
+
+  /**
+   * Envia a lista atualizada de espectadores para todos os conectados.
+   */
+  broadcastViewers(viewers) {
+    Object.values(this.peer.connections).forEach(conns => {
+      conns.forEach(conn => {
+        if (conn.type === 'data' && conn.open) {
+          conn.send({
+            type: 'viewers-update',
+            viewers: viewers.map(v => ({
+              username: v.username,
+              userId: v.userId,
+              avatar: v.avatar
+            }))
           });
         }
       });

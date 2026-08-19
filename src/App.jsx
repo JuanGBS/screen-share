@@ -82,25 +82,29 @@ function App() {
           videoRef.current.srcObject = remoteStream;
           videoRef.current.muted = true; // Força mudo inicialmente para evitar bloqueio do Firefox
 
-          // Setup Analyser
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          const source = audioContext.createMediaStreamSource(remoteStream);
-          const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(analyser);
+          // Setup Analyser - APENAS SE HOUVER ÁUDIO
+          if (remoteStream.getAudioTracks().length > 0) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(remoteStream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
 
-          audioContextRef.current = audioContext;
-          analyserRef.current = analyser;
+            audioContextRef.current = audioContext;
+            analyserRef.current = analyser;
 
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          const updateLevel = () => {
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            setAudioLevel(sum / dataArray.length);
-            animationFrameRef.current = requestAnimationFrame(updateLevel);
-          };
-          updateLevel();
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const updateLevel = () => {
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+              setAudioLevel(sum / dataArray.length);
+              animationFrameRef.current = requestAnimationFrame(updateLevel);
+            };
+            updateLevel();
+          } else {
+            console.warn("Stream recebido não possui áudio.");
+          }
 
           videoRef.current.onloadedmetadata = () => {
             videoRef.current.play().catch(err => {
@@ -502,7 +506,7 @@ function App() {
                 </button>
                 <button
                   onClick={confirmShare}
-                  className="bg-blue-600 hover:bg-blue-500 flex-1 px-8 py-3 rounded-lg font-bold shadow-lg transition-all text-sm"
+                  className={`bg-blue-600 hover:bg-blue-500 flex-1 px-8 py-3 rounded-lg font-bold shadow-lg transition-all text-sm ${isSharing ? 'hidden' : ''}`}
                 >
                   Entrar ao Vivo
                 </button>

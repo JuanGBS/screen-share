@@ -16,10 +16,9 @@ class StreamService {
     this.peer = new Peer(id, {
       host: '0.peerjs.com',
       port: 443,
-      secure: true, // Necessário para evitar erros de segurança no Firefox/Chrome
+      secure: true,
       debug: 1,
       config: {
-        
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
